@@ -13,7 +13,7 @@ def get_access_token(client_id: str, client_secret: str) -> dict:
         raise ValueError("CLIENT_ID and CLIENT_SECRET must be set in the environment")
 
     response = requests.post(
-        f"{base_url}oauth/generate_access_token",
+        url=f"{base_url}oauth/generate_access_token",
         json={
             "client_id": client_id,
             "client_secret": client_secret,
@@ -29,7 +29,7 @@ def refresh_access_token(client_id: str, refresh_token: str) -> dict:
         raise ValueError("CLIENT_ID and REFRESH_TOKEN must be set in the environment")
 
     response = requests.post(
-        f"{base_url}oauth/regenerate_access_token",
+        url=f"{base_url}oauth/regenerate_access_token",
         json={
             "client_id": client_id,
             "refresh_token": refresh_token,
