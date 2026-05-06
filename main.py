@@ -9,11 +9,11 @@ from geopy.distance import geodesic as geodesic
 
 class APIFetcher:
     def __init__(self, client_id, client_secret):
-        self.client_id: str = client_id
-        self.client_secret: str = client_secret
-        self.access_token: str = ""
-        self.refresh_token: str = ""
-        self.expires_in: int = -1
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.access_token = ""
+        self.refresh_token = ""
+        self.expires_in = -1
 
     def fetch_token(self):
         data = {
@@ -85,13 +85,13 @@ class APIFetcher:
 
 
 class PersonalisedOptions:
-    def __init__(self, user_address: str, max_distance: int, fuel_type: str):
-        self.user_address: str = user_address
-        self.user_coordinates: tuple[float, float] = self.get_user_coordinates()
-        self.max_distance: int = max_distance
-        self.fuel_type: str = fuel_type
-        self.closest_stations: list[dict] = []
-        self.cheapest_station: dict = {}
+    def __init__(self, user_address, max_distance, fuel_type):
+        self.user_address = user_address
+        self.user_coordinates = self.get_user_coordinates()
+        self.max_distance = max_distance
+        self.fuel_type = fuel_type
+        self.closest_stations = []
+        self.cheapest_station = {}
 
     def get_user_coordinates(self):
         geolocator = Nominatim(user_agent="best_fuel_station_finder")
@@ -115,7 +115,7 @@ class PersonalisedOptions:
     def get_cheapest_fuel_price(self):
         cheapest_station = {}
         for station in self.closest_stations:
-            fuel_types: list[str] = station["fuel_types"]
+            fuel_types = station["fuel_types"]
         # TODO: #5 setup the other api endpoint that has the fuel prices and merge it with the station data to get the fuel prices for each station
         self.cheapest_station = cheapest_station
         return self.cheapest_station
