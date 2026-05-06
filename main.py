@@ -3,15 +3,17 @@ import json
 from dotenv import load_dotenv
 import os
 import requests
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic as geodesic
 
 
-class API_Fetcher:
+class APIFetcher:
     def __init__(self, client_id, client_secret):
         self.client_id: str = client_id
         self.client_secret: str = client_secret
-        self.access_token: str = None
-        self.refresh_token: str = None
-        self.expires_in: int = None
+        self.access_token: str = ""
+        self.refresh_token: str = ""
+        self.expires_in: int = -1
 
     def fetch_token(self):
         data = {
@@ -76,16 +78,57 @@ class API_Fetcher:
 
             else:
                 print(f"Batch {batch_number} completed.")
-                data.append(response.json())
+                for station in response.json():
+                    data.append(station)
                 batch_number += 1
         return data
+
+
+class PersonalisedOptions:
+    def __init__(self, user_address: str, max_distance: int):
+        self.user_address: str = user_address
+        self.user_coordinates: tuple[float, float] = self.get_user_coordinates()
+        self.max_distance: int = max_distance
+        self.closest_stations: list[dict] = []
+
+    def get_user_coordinates(self):
+        geolocator = Nominatim(user_agent="best_fuel_station_finder")
+        location = geolocator.geocode(self.user_address)
+        self.user_coordinates = (location.latitude, location.longitude)
+        return self.user_coordinates
+
+    def search_closest_stations(self, stations):
+        closest_stations = []
+        for station in stations:
+            station_coordinates = (
+                station["location"]["latitude"],
+                station["location"]["longitude"],
+            )
+            distance = geodesic(
+                self.user_coordinates, station_coordinates
+            ).kilometers
+            if distance <= self.max_distance:
+                closest_stations.append(station)
+        self.closest_stations = closest_stations
+        return self.closest_stations
 
 
 if __name__ == "__main__":
     load_dotenv()
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
-    api_fetcher = API_Fetcher(client_id, client_secret)
+
+    api_fetcher = APIFetcher(client_id, client_secret)
     api_fetcher.fetch_token()
-    with open("pfs_data.json", "w") as f:
-        json.dump(api_fetcher.fetch_pfs_info(), f, indent=2)
+    if not os.path.exists("pfs_data.json"):
+        stations = api_fetcher.fetch_pfs_info()
+        with open("pfs_data.json", "w") as f:
+            json.dump(stations, f, indent=2)
+    else:
+        with open("pfs_data.json", "r") as f:
+            stations = json.load(f)
+
+    personalised_options = PersonalisedOptions("10 Downing Street, London, UK", 30)
+    closest_stations = personalised_options.search_closest_stations(stations)
+    with open("final.json", "w") as f:
+        json.dump(closest_stations, f, indent=4)
