@@ -8,12 +8,18 @@ from geopy.distance import geodesic as geodesic
 
 
 class APIFetcher:
-    def __init__(self, client_id, client_secret):
+    def __init__(self, client_id, client_secret, user_address, max_distance, fuel_type):
         self.client_id = client_id
         self.client_secret = client_secret
         self.access_token = ""
         self.refresh_token = ""
         self.expires_in = -1
+        self.user_address = user_address
+        self.user_coordinates = self.get_user_coordinates()
+        self.max_distance = max_distance
+        self.fuel_type = fuel_type
+        self.closest_stations = []
+        self.cheapest_station = {}
 
     def fetch_token(self):
         data = {
@@ -83,16 +89,6 @@ class APIFetcher:
                 batch_number += 1
         return data
 
-
-class PersonalisedOptions:
-    def __init__(self, user_address, max_distance, fuel_type):
-        self.user_address = user_address
-        self.user_coordinates = self.get_user_coordinates()
-        self.max_distance = max_distance
-        self.fuel_type = fuel_type
-        self.closest_stations = []
-        self.cheapest_station = {}
-
     def get_user_coordinates(self):
         geolocator = Nominatim(user_agent="best_fuel_station_finder")
         location = geolocator.geocode(self.user_address)
@@ -126,7 +122,9 @@ if __name__ == "__main__":
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
 
-    api_fetcher = APIFetcher(client_id, client_secret)
+    api_fetcher = APIFetcher(
+        client_id, client_secret, "10 Downing Street, London, UK", 2, "E5"
+    )
     api_fetcher.fetch_token()
     if not os.path.exists("pfs_data.json"):
         stations = api_fetcher.fetch_pfs_info()
@@ -134,7 +132,7 @@ if __name__ == "__main__":
         with open("pfs_data.json", "r") as f:
             stations = json.load(f)
 
-    personalised_options = PersonalisedOptions("10 Downing Street, London, UK", 2, "E5")
+    personalised_options = api_fetcher
     closest_stations = personalised_options.search_closest_stations(stations)
     cheapest_station = personalised_options.get_cheapest_fuel_price()
     with open("final.json", "w") as f:
