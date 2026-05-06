@@ -85,11 +85,13 @@ class APIFetcher:
 
 
 class PersonalisedOptions:
-    def __init__(self, user_address: str, max_distance: int):
+    def __init__(self, user_address: str, max_distance: int, fuel_type: str):
         self.user_address: str = user_address
         self.user_coordinates: tuple[float, float] = self.get_user_coordinates()
         self.max_distance: int = max_distance
+        self.fuel_type: str = fuel_type
         self.closest_stations: list[dict] = []
+        self.cheapest_station: dict = {}
 
     def get_user_coordinates(self):
         geolocator = Nominatim(user_agent="best_fuel_station_finder")
@@ -104,13 +106,19 @@ class PersonalisedOptions:
                 station["location"]["latitude"],
                 station["location"]["longitude"],
             )
-            distance = geodesic(
-                self.user_coordinates, station_coordinates
-            ).kilometers
+            distance = geodesic(self.user_coordinates, station_coordinates).kilometers
             if distance <= self.max_distance:
                 closest_stations.append(station)
         self.closest_stations = closest_stations
         return self.closest_stations
+
+    def get_cheapest_fuel_price(self):
+        cheapest_station = {}
+        for station in self.closest_stations:
+            fuel_types: list[str] = station["fuel_types"]
+        # TODO: #5 setup the other api endpoint that has the fuel prices and merge it with the station data to get the fuel prices for each station
+        self.cheapest_station = cheapest_station
+        return self.cheapest_station
 
 
 if __name__ == "__main__":
@@ -122,13 +130,16 @@ if __name__ == "__main__":
     api_fetcher.fetch_token()
     if not os.path.exists("pfs_data.json"):
         stations = api_fetcher.fetch_pfs_info()
-        with open("pfs_data.json", "w") as f:
-            json.dump(stations, f, indent=2)
     else:
         with open("pfs_data.json", "r") as f:
             stations = json.load(f)
 
-    personalised_options = PersonalisedOptions("10 Downing Street, London, UK", 30)
+    personalised_options = PersonalisedOptions("10 Downing Street, London, UK", 2, "E5")
     closest_stations = personalised_options.search_closest_stations(stations)
+    cheapest_station = personalised_options.get_cheapest_fuel_price()
     with open("final.json", "w") as f:
-        json.dump(closest_stations, f, indent=4)
+        json.dump(cheapest_station, f, indent=4)
+    # TODO: #1 setup the final output to show closest instead of just json
+    # TODO: #2 add a function to update the pfs data every 24 hours or so to keep the data fresh
+    # TODO: #3 setup the messager function to user via pushover or smth so that they can get input + output via that instead of the console
+    # TODO: #4 cleanup
