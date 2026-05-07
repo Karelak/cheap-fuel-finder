@@ -152,18 +152,20 @@ class CheapestFuelStationFinder:
         for price_entry in prices:
             # Find the fuel type we're looking for in this station's prices
             for fuel in price_entry["fuel_prices"]:
-                if fuel["fuel_type"] == self.fuel_type:
-                    if fuel["price"] < cheapest_price:
-                        cheapest_price = fuel["price"]
-                        cheapest_station = {
-                            "node_id": price_entry["node_id"],
-                            "trading_name": price_entry["trading_name"],
-                            "price": fuel["price"],
-                        }
-                    print(
-                        f"Checked station: {price_entry['trading_name']} - {self.fuel_type}: £{fuel['price']}"
-                    )
-                    break  # Move to next station once we find the fuel type
+                if (
+                    fuel["fuel_type"] == self.fuel_type
+                    and fuel["price"] < cheapest_price
+                ):
+                    cheapest_price = fuel["price"]
+                    cheapest_station = {
+                        "node_id": price_entry["node_id"],
+                        "trading_name": price_entry["trading_name"],
+                        "price": fuel["price"],
+                    }
+                print(
+                    f"Checked station: {price_entry['trading_name']} - {self.fuel_type}: £{fuel['price']}"
+                )
+                break  # Move to next station once we find the fuel type
 
         return cheapest_station
 
