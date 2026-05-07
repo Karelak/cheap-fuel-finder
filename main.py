@@ -20,7 +20,7 @@ class CheapestFuelStationFinder:
         self.refresh_token = tokens[1]
         self.user_address = user_address
         self.max_distance = max_distance
-        self.fuel_type = fuel_type.upper()
+        self.fuel_type = fuel_type.upper().replace(" ", "_")
 
     def generate_access_token(self):
         data = {
