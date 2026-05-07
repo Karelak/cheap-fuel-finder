@@ -15,7 +15,7 @@
 *.tax2010
 *.vcf
 *.xml
-*.json
+
 
 ### Database ###
 *.accdb
@@ -297,4 +297,10 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/windows,visualstudiocode,python,macos,linux,dotenv,data,database
 
 # Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
+
+# will be out of date for sources
+*.json 
+
+# Ignore config files with real data
+config.py
 

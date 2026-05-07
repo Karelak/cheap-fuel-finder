@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 import os
 import simdjson as json
 import requests
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+from datetime import datetime
 
 
 class CheapestFuelStationFinder:
@@ -144,33 +147,54 @@ class CheapestFuelStationFinder:
 
         return prices
 
+    def get_users_closest_stations(self):
+        stations = self.fetch_pfs_info()
+        user_coordinates = Nominatim(user_agent="cheap-fuel-finder").geocode(
+            self.user_address
+        )
+        nearby_stations = []
+        for station in stations:
+            station_coordinates = (
+                station["location"]["latitude"],
+                station["location"]["longitude"],
+            )
+            distance = geodesic(
+                (user_coordinates.latitude, user_coordinates.longitude),
+                station_coordinates,
+            ).kilometers
+            if distance <= self.max_distance:
+                nearby_stations.append(station)
+
+        return nearby_stations
+
     def find_cheapest_station(self):
+        nearby_stations = self.get_users_closest_stations()
         prices = self.fetch_pfs_prices()
         cheapest_station = None
         cheapest_price = float("inf")
 
-        for price_entry in prices:
-            # Find the fuel type we're looking for in this station's prices
-            for fuel in price_entry["fuel_prices"]:
-                if (
-                    fuel["fuel_type"] == self.fuel_type
-                    and fuel["price"] < cheapest_price
-                ):
-                    cheapest_price = fuel["price"]
-                    cheapest_station = {
-                        "node_id": price_entry["node_id"],
-                        "trading_name": price_entry["trading_name"],
-                        "price": fuel["price"],
-                    }
-                print(
-                    f"Checked station: {price_entry['trading_name']} - {self.fuel_type}: £{fuel['price']}"
-                )
-                break  # Move to next station once we find the fuel type
+        for station in nearby_stations:
+            for price_entry in prices:
+                if price_entry["node_id"] == station["node_id"]:
+                    for fuel in price_entry["fuel_prices"]:
+                        if (
+                            fuel["fuel_type"] == self.fuel_type
+                            and fuel["price"] < cheapest_price
+                            and fuel["price"] > 0
+                            and fuel["price"] is not None
+                            and fuel["price"] != 1
+                            and datetime.fromisoformat(
+                                fuel["price_change_effective_timestamp"]
+                            ).timestamp()
+                            > time.time() - 24 * 3600 * 7
+                        ):
+                            cheapest_price = fuel["price"]
+                            cheapest_station = {
+                                "node_id": price_entry["node_id"],
+                                "trading_name": price_entry["trading_name"],
+                                "price": fuel["price"],
+                            }
+
+                    break  # Move to next station once we find the matching node_id
 
         return cheapest_station
-
-
-if __name__ == "__main__":
-    finder = CheapestFuelStationFinder(fuel_type="B10")
-    cheapest_station = finder.find_cheapest_station()
-    print("Cheapest station found: ", cheapest_station)
