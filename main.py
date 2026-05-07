@@ -1,31 +1,23 @@
 import time
-import simdjson as json
 from dotenv import load_dotenv
 import os
+import simdjson as json
 import requests
-from geopy.geocoders import Nominatim
-from geopy.distance import geodesic as geodesic
 
 
-class APIFetcher:
-    def __init__(self, user_address, max_distance, fuel_type):
-        self.client_id = ""
-        self.client_secret = ""
-        self.access_token = ""
-        self.refresh_token = ""
-        self.expires_in = -1
-        self.user_address = user_address
-        self.user_coordinates = self.get_user_coordinates()
-        self.max_distance = max_distance
-        self.fuel_type = fuel_type
-        self.closest_stations = []
-        self.cheapest_station = {}
-        self.fetch_credentials()
-
-    def fetch_credentials(self):
+class CheapestFuelStationFinder:
+    def __init__(
+        self, user_address="10 Downing Street", max_distance=5, fuel_type="E5"
+    ):
         load_dotenv()
         self.client_id = os.getenv("CLIENT_ID")
         self.client_secret = os.getenv("CLIENT_SECRET")
+        tokens = self.generate_access_token()
+        self.access_token = tokens[0]
+        self.refresh_token = tokens[1]
+        self.user_address = user_address
+        self.max_distance = max_distance
+        self.fuel_type = fuel_type.upper()
 
     def generate_access_token(self):
         data = {
@@ -40,8 +32,8 @@ class APIFetcher:
         token_data = response.json()["data"]
         self.access_token = token_data["access_token"]
         self.refresh_token = token_data["refresh_token"]
-        self.expires_in = token_data["expires_in"]
-        return self.access_token, self.refresh_token, self.expires_in
+
+        return self.access_token, self.refresh_token
 
     def regenerate_access_token(self):
         data = {
@@ -53,16 +45,23 @@ class APIFetcher:
             data=data,
         )
         response.raise_for_status()
-        token_data = response.json()["data"]
+        token_data = response.json()
         self.access_token = token_data["access_token"]
-        self.expires_in = token_data["expires_in"]
-        return self.access_token, self.expires_in
+
+        return self.access_token
 
     def fetch_pfs_info(self):
+        if (
+            os.path.exists("data/stations.json")
+            and os.path.getmtime("data/stations.json") > time.time() - 1 * 3600
+        ):
+            print("Using cached station data.")
+            with open("data/stations.json", "r") as f:
+                return json.loads(f.read())
         headers = {"Authorization": f"Bearer {self.access_token}"}
         finished = False
         batch_number = 1
-        data = []
+        stations = []
         while not finished:
             try:
                 response = requests.get(
@@ -75,9 +74,7 @@ class APIFetcher:
             except requests.exceptions.HTTPError as e:
                 match e.response.status_code:
                     case 401:
-                        self.access_token, self.expires_in = (
-                            self.regenerate_access_token()
-                        )
+                        self.access_token = self.regenerate_access_token()
                         headers["Authorization"] = f"Bearer {self.access_token}"
                     case 429:
                         print("Rate limit exceeded. Retrying in 60 seconds...")
@@ -90,39 +87,88 @@ class APIFetcher:
 
             else:
                 print(f"Batch {batch_number} completed.")
-                for station in response.json():
-                    data.append(station)
+                stations.extend(response.json())
                 batch_number += 1
-        return data
 
-    def get_user_coordinates(self):
-        geolocator = Nominatim(user_agent="best_fuel_station_finder")
-        location = geolocator.geocode(self.user_address)
-        self.user_coordinates = (location.latitude, location.longitude)
-        return self.user_coordinates
+        if not os.path.exists("data"):
+            os.makedirs("data")
+        with open("data/stations.json", "w") as f:
+            json.dump(stations, f, indent=4)
 
-    def search_closest_stations(self, stations):
-        closest_stations = []
-        for station in stations:
-            station_coordinates = (
-                station["location"]["latitude"],
-                station["location"]["longitude"],
-            )
-            distance = geodesic(self.user_coordinates, station_coordinates).kilometers
-            if distance <= self.max_distance:
-                closest_stations.append(station)
-        self.closest_stations = closest_stations
-        return self.closest_stations
+        return stations
 
-    def get_cheapest_fuel_price(self):
-        cheapest_station = {}
-        for station in self.closest_stations:
-            fuel_types = station["fuel_types"]
-        # TODO: #5 setup the other api endpoint that has the fuel prices and merge it with the station data to get the fuel prices for each station
-        self.cheapest_station = cheapest_station
-        return self.cheapest_station
+    def fetch_pfs_prices(self):
+        if (
+            os.path.exists("data/prices.json")
+            and os.path.getmtime("data/prices.json") > time.time() - 15 * 60
+        ):
+            print("Using cached price data.")
+            with open("data/prices.json", "r") as f:
+                return json.loads(f.read())
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        finished = False
+        batch_number = 1
+        prices = []
+        while not finished:
+            try:
+                response = requests.get(
+                    url="https://www.fuel-finder.service.gov.uk/api/v1/pfs/fuel-prices",
+                    headers=headers,
+                    params={"batch-number": batch_number},
+                )
+                response.raise_for_status()
 
-    # TODO: #1 setup the final output to show closest instead of just json
-    # TODO: #2 add a function to update the pfs data every 24 hours or so to keep the data fresh
-    # TODO: #3 setup the messager function to user via pushover or smth so that they can get input + output via that instead of the console
-    # TODO: #4 cleanup
+            except requests.exceptions.HTTPError as e:
+                match e.response.status_code:
+                    case 401:
+                        self.access_token = self.regenerate_access_token()
+                        headers["Authorization"] = f"Bearer {self.access_token}"
+                    case 429:
+                        print("Rate limit exceeded. Retrying in 60 seconds...")
+                        time.sleep(60)
+                    case 404:
+                        print("No more batches to fetch.")
+                        finished = True
+                    case _:
+                        raise
+
+            else:
+                print(f"Batch {batch_number} completed.")
+                prices.extend(response.json())
+                batch_number += 1
+
+        if not os.path.exists("data"):
+            os.makedirs("data")
+        with open("data/prices.json", "w") as f:
+            json.dump(prices, f, indent=4)
+
+        return prices
+
+    def find_cheapest_station(self):
+        prices = self.fetch_pfs_prices()
+        cheapest_station = None
+        cheapest_price = float("inf")
+
+        for price_entry in prices:
+            # Find the fuel type we're looking for in this station's prices
+            for fuel in price_entry["fuel_prices"]:
+                if fuel["fuel_type"] == self.fuel_type:
+                    if fuel["price"] < cheapest_price:
+                        cheapest_price = fuel["price"]
+                        cheapest_station = {
+                            "node_id": price_entry["node_id"],
+                            "trading_name": price_entry["trading_name"],
+                            "price": fuel["price"],
+                        }
+                    print(
+                        f"Checked station: {price_entry['trading_name']} - {self.fuel_type}: £{fuel['price']}"
+                    )
+                    break  # Move to next station once we find the fuel type
+
+        return cheapest_station
+
+
+if __name__ == "__main__":
+    finder = CheapestFuelStationFinder(fuel_type="B10")
+    cheapest_station = finder.find_cheapest_station()
+    print("Cheapest station found: ", cheapest_station)
