@@ -1,5 +1,5 @@
 import time
-import json
+import simdjson as json
 from dotenv import load_dotenv
 import os
 import requests
@@ -8,9 +8,9 @@ from geopy.distance import geodesic as geodesic
 
 
 class APIFetcher:
-    def __init__(self, client_id, client_secret, user_address, max_distance, fuel_type):
-        self.client_id = client_id
-        self.client_secret = client_secret
+    def __init__(self, user_address, max_distance, fuel_type):
+        self.client_id = ""
+        self.client_secret = ""
         self.access_token = ""
         self.refresh_token = ""
         self.expires_in = -1
@@ -20,8 +20,14 @@ class APIFetcher:
         self.fuel_type = fuel_type
         self.closest_stations = []
         self.cheapest_station = {}
+        self.fetch_credentials()
 
-    def fetch_token(self):
+    def fetch_credentials(self):
+        load_dotenv()
+        self.client_id = os.getenv("CLIENT_ID")
+        self.client_secret = os.getenv("CLIENT_SECRET")
+
+    def generate_access_token(self):
         data = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,
@@ -116,27 +122,6 @@ class APIFetcher:
         self.cheapest_station = cheapest_station
         return self.cheapest_station
 
-
-if __name__ == "__main__":
-    load_dotenv()
-    client_id = os.getenv("CLIENT_ID")
-    client_secret = os.getenv("CLIENT_SECRET")
-
-    api_fetcher = APIFetcher(
-        client_id, client_secret, "10 Downing Street, London, UK", 2, "E5"
-    )
-    api_fetcher.fetch_token()
-    if not os.path.exists("pfs_data.json"):
-        stations = api_fetcher.fetch_pfs_info()
-    else:
-        with open("pfs_data.json", "r") as f:
-            stations = json.load(f)
-
-    personalised_options = api_fetcher
-    closest_stations = personalised_options.search_closest_stations(stations)
-    cheapest_station = personalised_options.get_cheapest_fuel_price()
-    with open("final.json", "w") as f:
-        json.dump(cheapest_station, f, indent=4)
     # TODO: #1 setup the final output to show closest instead of just json
     # TODO: #2 add a function to update the pfs data every 24 hours or so to keep the data fresh
     # TODO: #3 setup the messager function to user via pushover or smth so that they can get input + output via that instead of the console
